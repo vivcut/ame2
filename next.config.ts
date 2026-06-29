@@ -1,11 +1,9 @@
-/** @type {import('next').NextConfig} */
-const nextconfig = {
-  experimental: {
-    // This tells the bundler to completely ignore the public folder during function tracing
-    outputFileTracingExcludes: {
-      '*': ['public/**/*'],
-    },
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  outputFileTracingExcludes: {
+    "*": ["./public/content/**"],
   },
 };
 
-module.exports = nextconfig;
+export default nextConfig;

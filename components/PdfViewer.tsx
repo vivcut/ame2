@@ -17,7 +17,7 @@ interface PdfPanel {
 }
 
 function getDownloadUrl(segments: string[]): string {
-  return "/api/file/" + segments.map(encodeURIComponent).join("/");
+  return "/content/" + segments.map(encodeURIComponent).join("/");
 }
 
 interface PdfViewerProps {

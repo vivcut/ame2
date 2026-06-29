@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import manifest from "@/content-manifest.json";
 
 export type FileType = "qp" | "ms" | "er" | "other";
 
@@ -21,99 +20,42 @@ export interface ContentFolder {
 
 export type ContentNode = ContentFile | ContentFolder;
 
-const CONTENT_DIR = path.join(process.cwd(), "content");
-
-function detectFileType(name: string): FileType {
-  const lower = name.toLowerCase();
-  if (lower.includes("_qp") || lower.includes("_qp_") || lower.endsWith("_qp.pdf") || lower.includes("qp.pdf")) return "qp";
-  if (lower.includes("_ms") || lower.includes("_ms_") || lower.endsWith("_ms.pdf") || lower.includes("ms.pdf")) return "ms";
-  if (lower.includes("_er") || lower.includes("_er.") || lower.endsWith("_er.pdf") || lower.includes("er.pdf")) return "er";
-  return "other";
-}
-
-function readDir(dirPath: string, segments: string[]): ContentNode[] {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-
-  const nodes: ContentNode[] = [];
-
-  for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue; // skip hidden files
-
-    const childSegments = [...segments, entry.name];
-    const childPath = path.join(dirPath, entry.name);
-
-    if (entry.isDirectory()) {
-      const children = readDir(childPath, childSegments);
-      nodes.push({
-        type: "folder",
-        name: entry.name,
-        segments: childSegments,
-        children,
-      });
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).replace(".", "").toLowerCase();
-      nodes.push({
-        type: "file",
-        name: entry.name,
-        segments: childSegments,
-        fileType: detectFileType(entry.name),
-        extension: ext,
-      });
-    }
-  }
-
-  // Sort: folders first, then files; alphabetically within each group
-  nodes.sort((a, b) => {
-    if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-
-  return nodes;
-}
+const tree: ContentNode[] = manifest as unknown as ContentNode[];
 
 export function getContentTree(): ContentNode[] {
-  if (!fs.existsSync(CONTENT_DIR)) return [];
-  return readDir(CONTENT_DIR, []);
+  return tree;
 }
 
 export function getContentAtPath(segments: string[]): ContentNode | null {
-  if (!fs.existsSync(CONTENT_DIR)) return null;
-
   if (segments.length === 0) {
     // Return a virtual root folder
     return {
       type: "folder",
       name: "content",
       segments: [],
-      children: getContentTree(),
+      children: tree,
     };
   }
 
-  const targetPath = path.join(CONTENT_DIR, ...segments);
+  // Walk the tree to find the node at the given path
+  let nodes: ContentNode[] = tree;
 
-  if (!fs.existsSync(targetPath)) return null;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const found = nodes.find((n) => n.name === seg);
 
-  const stat = fs.statSync(targetPath);
+    if (!found) return null;
 
-  if (stat.isDirectory()) {
-    const children = readDir(targetPath, segments);
-    return {
-      type: "folder",
-      name: segments[segments.length - 1],
-      segments,
-      children,
-    };
-  } else {
-    const name = segments[segments.length - 1];
-    const ext = path.extname(name).replace(".", "").toLowerCase();
-    return {
-      type: "file",
-      name,
-      segments,
-      fileType: detectFileType(name),
-      extension: ext,
-    };
+    if (i === segments.length - 1) {
+      return found;
+    }
+
+    // Need to go deeper — must be a folder
+    if (found.type !== "folder") return null;
+    nodes = found.children;
   }
+
+  return null;
 }
 
 export function segmentsToHref(segments: string[]): string {
@@ -122,5 +64,6 @@ export function segmentsToHref(segments: string[]): string {
 }
 
 export function getFileDownloadUrl(segments: string[]): string {
-  return "/api/file/" + segments.map(encodeURIComponent).join("/");
+  // Files are served statically from public/content/
+  return "/content/" + segments.map(encodeURIComponent).join("/");
 }
